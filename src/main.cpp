@@ -2248,7 +2248,6 @@ void gait_command(int gaittype, int reverse, int hipforward, int hipbackward, in
 TaskHandle_t h_beeper;
 TaskHandle_t h_print;
 TaskHandle_t h_BTcom;
-TaskHandle_t h_chirper;
 TaskHandle_t h_dialMode;
 TaskHandle_t h_ledFlasher;
 TaskHandle_t h_servoTest;
@@ -2265,6 +2264,8 @@ void printTaskInfo(xTaskHandle xTaskToQuery=NULL){
   Serial.printf("%s mark: %u bytes \n" ,pcTaskGetTaskName(xTaskToQuery), uxTaskGetStackHighWaterMark(xTaskToQuery));
 }
 
+// Beeper Task for beeping. Call this task if you need a notifier that doesn't keep 
+// other tasks blocked.
 void taskBeeper(void *pvParameters){
   // The notified value is the frequency of the beep
   uint32_t ulNotifiedValue;
@@ -2274,6 +2275,7 @@ void taskBeeper(void *pvParameters){
   }
 }
 
+// Print task. Just prints debug stuff. call when needed with xTaskNotify(h_print, 0, eNoAction);. 
 void taskPrint(void *pvParameters) {
   
   while (1) {
@@ -2292,6 +2294,7 @@ void taskPrint(void *pvParameters) {
   }
 }
 
+// Reporter task. Reports current mode on serial port. 
 void taskReporter(void *pvParameters){  // reporting modes on serial 
   u_long ReportTime = 1000;
   for(;;){
@@ -2320,6 +2323,7 @@ void taskReporter(void *pvParameters){  // reporting modes on serial
   }
 }
 
+// Bluetooth coms. A task for confirming serial communication with Bluetooth module
 void taskBTcom(void *pvParameters){
   while(1){
     myDelayMs(10);
@@ -2335,18 +2339,7 @@ void taskBTcom(void *pvParameters){
   }
 }
 
-void taskChirper(void *pvParameters){
-  
-  /* task freq */
-  const TickType_t xFrequency = 1000;
-  TickType_t xLastWakeTime = xTaskGetTickCount();
-  while(1){
-    myDelayMsUntil( &xLastWakeTime, xFrequency );
-
-    beep(NOTE_A4);
-  }
-}
-
+// Sets the mode by reading mode selector pot. 
 void taskDialmode(void *pvParameters){
   short priorDialMode = -1;
   TickType_t xFrequency = 100;
@@ -2385,6 +2378,7 @@ void taskDialmode(void *pvParameters){
   }
 }
 
+// Flashes the onboard LED according to selected mode
 void taskLedflasher(void *pvParameters){
   TickType_t xFrequency = 100;
   TickType_t xLastWakeTime = xTaskGetTickCount();
@@ -2420,6 +2414,8 @@ void taskLedflasher(void *pvParameters){
   }
 }
 
+// Debug Task to test servos. Reads pot on TEST_PIN to select servo angle.
+// Uses button on BUTTONPIN to select servo. 
 void taskServotest(void *pvParameters){
   pinMode(TEST_PIN, INPUT);
   uint16_t *smother;
@@ -2431,14 +2427,14 @@ void taskServotest(void *pvParameters){
     val = ema_filter(val, smother);
     uint8_t i = state_machine();
     //Serial.printf("A5 filtered: %u Servo %u ", val, i);
-    unsigned int time = micros();
     servoDriver.setPin(i, 0, val);
     servoDriver.setPin(i+6, val);
-    time = micros() - time;
-    //Serial.printf("time: %uus\n", time);
   }
 }
 
+// This is where the heavy lifting is done. RC control over bluetooth. 
+// When active it scans the bluetooth serial for incoming commands at 
+// ~50Hz. Here we have lots of room for improvement. 
 void taskModeRC(void *pvParameters){
   int factor = 1;
   uint32_t del = 1000;
@@ -2741,6 +2737,7 @@ void taskModeRC(void *pvParameters){
   }
 }
 
+// It just... stands there. 
 void taskModeStand(void *pvParameters){
   int32_t del = 1000;
   for(;;){
@@ -2759,6 +2756,7 @@ void taskModeStand(void *pvParameters){
   }
 }
 
+// Adjust Servos. Sets all servos to 90 degrees so mechanical adjustments can be made. 
 void taskModeAdjust(void *pvParameters){ // Servo adjust mode, put all servos at 90 degrees
   uint32_t del = 1000;
   for (;;){
@@ -2776,6 +2774,7 @@ void taskModeAdjust(void *pvParameters){ // Servo adjust mode, put all servos at
   }
 }
 
+// cycles through all connected servos setting 140, 90, and 40 degrees. 
 void taskModeTest(void *pvParameters){    // Test each servo one by one
   uint32_t del = 1000;
   for(;;){
@@ -2807,6 +2806,7 @@ void taskModeTest(void *pvParameters){    // Test each servo one by one
   }
 }
 
+// show and spectacle. Mainly to test powersupply. 
 void taskModeDemo(void *pvParameters){    // Demo Mode
   uint32_t del = 1000;
   for (;;){
