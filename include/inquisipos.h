@@ -56,6 +56,7 @@ void packetErrorChirp(char c);
 void processPacketData();
 int receiveDataHandler();
 void dumpPacket();
+void printTaskInfo(xTaskHandle xTaskToQuery);
 
 
 #endif
