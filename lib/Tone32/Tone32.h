@@ -6,6 +6,7 @@
 #include "pitches.h"
 #include <Mydelay.h>
 
+void tone32Setup();
 void tone32(uint8_t pin, unsigned int frequency, unsigned long duration = 0, uint8_t channel = TONE_CHANNEL);
 void noTone32(uint8_t pin, uint8_t channel = TONE_CHANNEL);
 #endif

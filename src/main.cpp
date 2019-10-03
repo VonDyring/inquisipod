@@ -128,7 +128,6 @@ const char *Version = "#RV2r1a";
 #define GRIPARM_ELBOW_NEUTRAL 90
 #define GRIPARM_CLAW_NEUTRAL 90
 
-int GripArmElbowTarget=90, GripArmClawTarget=90;
 
 // Definitions for the servos
 
@@ -159,11 +158,7 @@ int GripArmElbowTarget=90, GripArmClawTarget=90;
 #define DIALMODE_RC_GRIPARM 4
 #define DIALMODE_RC 5
 
-
-
 #define SERVO_IIC_ADDR  (0x40)    // default servo driver IIC address
-
-int FreqMult = 1;
 
 /* #define PWMFREQUENCY (50*FreqMult)
 #define SERVOMIN  (190*FreqMult) // this is the 'minimum' pulse length count (out of 4096)
@@ -186,8 +181,11 @@ int FreqMult = 1;
 #define P_SIMPLE_WAITING_FOR_DATA 5
 #define MAXPACKETDATA 48
 
-void checkForCrashingHips();
+#define NUM_GRIPSERVOS ((Dialmode == DIALMODE_RC_GRIPARM)?2:0)  // if we're in griparm mode there are 2 griparm servos, else there are none
+#define TRIM_ZERO 127   // this value is the midpoint of the trim range (a byte)
 
+int GripArmElbowTarget=90, GripArmClawTarget=90;
+int FreqMult = 1;
 short ServoPos[2*NUM_LEGS+MAX_GRIPSERVOS]; // the last commanded position of each servo
 long ServoTime[2*NUM_LEGS+MAX_GRIPSERVOS]; // the time that each servo was last commanded to a new position
 byte ServoTrim[2*NUM_LEGS+MAX_GRIPSERVOS];  // trim values for fine adjustments to servo horn positions
@@ -198,7 +196,6 @@ u_long LastValidReceiveTime = 0;  // last time we got a completely valid packet 
 
 Adafruit_PWMServoDriver servoDriver = Adafruit_PWMServoDriver(); 
 int Dialmode;   // What's the robot potentiometer set to?
-#define NUM_GRIPSERVOS ((Dialmode == DIALMODE_RC_GRIPARM)?2:0)  // if we're in griparm mode there are 2 griparm servos, else there are none
 
 // setting PWM properties channel 0
 const int buzzer_freq = NOTE_A4;
@@ -207,7 +204,6 @@ const int buzzer_resolution = 10; //Resolution 8, 10, 12, 15
 byte TrimInEffect = 1;
 byte TrimCurLeg = 0;
 byte TrimPose = 0;
-#define TRIM_ZERO 127   // this value is the midpoint of the trim range (a byte)
 /* 
  Short power dips can cause the servo driver to put itself to sleep
  the checkForServoSleep() function uses IIC protocol to ask the servo
@@ -226,6 +222,11 @@ unsigned long SuppressScamperUntil = 0;  // if we had to wake up the servos, sup
 // setServo is the lowest level function for setting servo positions.
 // It handles trims too.
 byte deferServoSet = 0;
+
+int GripArmElbowDestination = 90;
+short GripArmElbowIncrement = 0;
+
+
 void setServo(int servonum, int position) {
   if (position != ServoPos[servonum]) {
     ServoTime[servonum] = millis();
@@ -452,7 +453,7 @@ void turn(int ccw, int hipforward, int hipbackward, int kneeup, int kneedown, lo
 
 void stand() {
   transactServos();
-    setLeg(ALL_LEGS, HIP_NEUTRAL, KNEE_STAND, 0);
+  setLeg(ALL_LEGS, HIP_NEUTRAL, KNEE_STAND, 0);
   commitServos();
 }
 
@@ -620,8 +621,7 @@ void gait_sidestep(int left, long timeperiod) {
   commitServos();
 }
 
-int GripArmElbowDestination = 90;
-short GripArmElbowIncrement = 0;
+
 
 void griparm_mode(char dpad) {
     // this mode retains state and moves slowly
@@ -1627,9 +1627,9 @@ void checkForSmoothMoves() {
 
 void beep(int f, int t) {
   if (f > 0 && t > 0) {
-    tone32(BEEPER_PIN, f, t);
+    tone32(BEEPER_PIN, f, t, TONE_CHANNEL);
   } else {
-    noTone32(BEEPER_PIN);
+    noTone32(BEEPER_PIN, TONE_CHANNEL);
   }
 }
 
@@ -2748,7 +2748,7 @@ void taskModeStand(void *pvParameters){
     if (Dialmode == DIALMODE_STAND){
       del = 250;
       stand();
-      setGrip(90,90);
+      //setGrip(90,90);
     }
     else{
       del = 1000;   // resetting task delay when leaving mode
@@ -2846,6 +2846,7 @@ void taskIrq(void *pvParameters){
   for(;;){
     myDelayMsUntil( &xLastWakeTime, xFrequency);
     portENTER_CRITICAL(&timerMux);
+    // print the counter or something
     interruptCounter = 0;
     portEXIT_CRITICAL(&timerMux);
   }
@@ -2857,8 +2858,8 @@ void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(BUTTONPIN,INPUT);
   
-  // this should result in ~44kHz 
-  timer_rupt = timerBegin(0, 40, true);
+  // this should result in ~44kHz 2MHz/44kHz = ~45 compare val
+  timer_rupt = timerBegin(0, 40, true); 
   timerAttachInterrupt(timer_rupt, onRupt, true);
   timerAlarmWrite(timer_rupt, 45, true);
   timerAlarmEnable(timer_rupt);
