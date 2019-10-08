@@ -7,15 +7,26 @@
 #include <Tone32.h>
 #include "inquisipos.h"
 #include <microsmooth.h>
+#include <TTS.h>
 
 const char *Version = "#RV2r1a";
+
+/* PINS */
+#define BEEPER_PIN  25
+#define MODE_PIN    A4    // pin 32
+#define TEST_PIN    A5    // pin 33
+#define BUTTONPIN   0
+#define ULTRAOUTPUTPIN  27
+#define ULTRAINPUTPIN   14
+#define BATTERY_PIN   _VBAT
+
+
 // Basic functions that move legs take a bit pattern
 // indicating which legs to move. The legs are numbered
 // clockwise starting with the right front leg being
 // number zero, going around
 // to the left legs, and finishing with the left front leg
 // being number 5
-
 #define NUM_LEGS 6
 
 // Bit patterns for different combinations of legs
@@ -142,14 +153,6 @@ const char *Version = "#RV2r1a";
 #define BF_ERROR  100         // deep beep for error situations
 #define BD_MED    50          // medium long beep duration
 
-/* PINS */
-#define BEEPER_PIN  25
-#define MODE_PIN    A4    // pin 32
-#define TEST_PIN    A5    // pin 33
-#define BUTTONPIN   0
-#define ULTRAOUTPUTPIN  27
-#define ULTRAINPUTPIN   14
-
 /* MODES */
 #define DIALMODE_STAND 0
 #define DIALMODE_ADJUST 1
@@ -157,6 +160,7 @@ const char *Version = "#RV2r1a";
 #define DIALMODE_DEMO 3
 #define DIALMODE_RC_GRIPARM 4
 #define DIALMODE_RC 5
+#define DIALMODE_LOWBAT 6
 
 #define SERVO_IIC_ADDR  (0x40)    // default servo driver IIC address
 
@@ -1625,11 +1629,19 @@ void checkForSmoothMoves() {
   }
 }
 
+SemaphoreHandle_t semapforBeep;
 void beep(int f, int t) {
   if (f > 0 && t > 0) {
-    tone32(BEEPER_PIN, f, t, TONE_CHANNEL);
-  } else {
-    noTone32(BEEPER_PIN, TONE_CHANNEL);
+    if(xSemaphoreTake(semapforBeep,1000) != pdFALSE){
+      tone32(BEEPER_PIN, f, t, TONE_CHANNEL);
+      xSemaphoreGive(semapforBeep);
+    }
+  } 
+  else {
+    if(xSemaphoreTake(semapforBeep,1000) != pdFALSE){
+      noTone32(BEEPER_PIN, TONE_CHANNEL);
+      xSemaphoreGive(semapforBeep);
+    }
   }
 }
 
@@ -2242,6 +2254,16 @@ void gait_command(int gaittype, int reverse, int hipforward, int hipbackward, in
        mode = MODE_GAIT;   // this stops auto-repeat of gamepad mode commands
 }
 
+
+void let_it_go(){
+  beep(NOTE_D4, 50);
+  beep(NOTE_E4, 50);
+  beep(NOTE_F4, 50);
+  beep(NOTE_G4, 50);
+  beep(NOTE_A4, 50);
+  beep(NOTE_B4, 50);
+  beep(NOTE_C3, 800);
+}
 /* TASKS
 ******************************************************************************/
 
@@ -2259,20 +2281,39 @@ TaskHandle_t h_modeRC;
 TaskHandle_t h_reporter;
 
 bool dialPause = false;
+bool lowBatt = false;
+
+TaskHandle_t h_battery;
+void taskBatteryMonitor(void *pvParameters){
+  const float min_volt = 4.9f;
+  pinMode(BATTERY_PIN, ANALOG);
+  uint8_t c = 0;
+  for(;;){
+    myDelayMs(500);
+    uint16_t val = analogRead(BATTERY_PIN);
+    float volt = (val * 3.3f * 2.0f * 1.05f )/4095.0f;      // val * maxVolt * divider * corr / maxres  
+    c++;
+    if (c >= 2){
+      c = 0;
+      if (volt < min_volt){
+        lowBatt = true;
+        Serial.printf("LOW VOLTAGE : %.2f \n", volt);
+        let_it_go();
+        /*
+        beep(NOTE_B4, 500);
+        myDelayMs(100);
+        beep(NOTE_A4, 100);
+        */
+      } else {
+        lowBatt = false;
+      }
+    }
+  }
+
+}
 
 void printTaskInfo(xTaskHandle xTaskToQuery=NULL){
   Serial.printf("%s mark: %u bytes \n" ,pcTaskGetTaskName(xTaskToQuery), uxTaskGetStackHighWaterMark(xTaskToQuery));
-}
-
-// Beeper Task for beeping. Call this task if you need a notifier that doesn't keep 
-// other tasks blocked.
-void taskBeeper(void *pvParameters){
-  // The notified value is the frequency of the beep
-  uint32_t ulNotifiedValue;
-  for(;;){
-    xTaskNotifyWait(0x00, ULONG_MAX, &ulNotifiedValue, portMAX_DELAY );
-    beep((int) ulNotifiedValue);
-  }
 }
 
 // Print task. Just prints debug stuff. call when needed with xTaskNotify(h_print, 0, eNoAction);. 
@@ -2315,9 +2356,12 @@ void taskReporter(void *pvParameters){  // reporting modes on serial
     } else if (Dialmode == DIALMODE_DEMO){
       ReportTime = 1000;
       Serial.println("Demo Mode");
+    } else if (Dialmode == DIALMODE_LOWBAT){
+      ReportTime = 1000;
+      Serial.println("Low Battery");
     } else {      // RC mode
       ReportTime = 2000;
-      Serial.printf("RC Mode: %i%c%c%c \n", ServosDetached, lastCmd, mode, submode);
+      Serial.printf("%i%c%c%c \n", ServosDetached, lastCmd, mode, submode);
       //Serial.printf("%s mark: %u bytes \n",pcTaskGetTaskName(h_modeRC), uxTaskGetStackHighWaterMark(h_modeRC));
     }                 
   }
@@ -2360,15 +2404,18 @@ void taskDialmode(void *pvParameters){
       Dialmode = DIALMODE_DEMO;
     } else if (p < 950) {
       Dialmode = DIALMODE_RC_GRIPARM;
-    } else {
+    } else {                // RC mode
       Dialmode = DIALMODE_RC;
+    }
+
+    if (lowBatt) {    // If low battery do nothing
+      Dialmode = DIALMODE_LOWBAT;
     }
 
     if (Dialmode != priorDialMode && priorDialMode != -1) {
       xFrequency = 1000;    
       dialPause = true;
-      Serial.print("new mode: ");Serial.println(Dialmode);
-      //xTaskNotify(h_beeper, (uint32_t) (100+100*Dialmode), eSetValueWithoutOverwrite);
+      Serial.print("new mode: ");Serial.println(Dialmode);     
       beep(100 + 100*Dialmode );
     } else {
       xFrequency = 100;
@@ -2404,7 +2451,15 @@ void taskLedflasher(void *pvParameters){
       } else{ 
         c = 0;
       }
-    } else {  // steady glow in griparm and RC mode
+    } else if (Dialmode == DIALMODE_LOWBAT){
+      if(c <=10){
+        continue;
+      } else {
+        c=0;
+      }
+
+    } 
+    else {  // steady glow in griparm and RC mode
       state = false;
       c=0;
     }
@@ -2437,7 +2492,7 @@ void taskServotest(void *pvParameters){
 // ~50Hz. Here we have lots of room for improvement. 
 void taskModeRC(void *pvParameters){
   int factor = 1;
-  uint32_t del = 1000;
+  uint32_t del = 100;
 
   for (;;){
     myDelayMs(del);
@@ -2467,7 +2522,7 @@ void taskModeRC(void *pvParameters){
         }
         u_long losstime = millis() - LastValidReceiveTime;
         Serial.printf("LOS %lu \n", losstime);  // LOS stands for "Loss of Signal"
-        del = 1000;
+        del = 100;
         continue;  // don't repeat commands if we haven't seen valid data in a while
       }
       if (gotnewdata == 0){
@@ -2732,7 +2787,7 @@ void taskModeRC(void *pvParameters){
         beep(100,20);
       }  // end of switch
     } else{
-      del = 1000;
+      del = 100;
     }
   }
 }
@@ -2867,23 +2922,27 @@ void setup() {
   Serial.begin(115200);
   BTSerial.begin(38400);
 
-  /* Tasks */
-  xTaskCreatePinnedToCore(taskPrint,"Print", 3072, NULL, tskIDLE_PRIORITY+1, &h_print,tskNO_AFFINITY);
+  semapforBeep = xSemaphoreCreateMutex();
+
+  /* Debug Tasks */
+  xTaskCreatePinnedToCore(taskPrint,"Print", 3072, NULL, tskIDLE_PRIORITY+2, &h_print,tskNO_AFFINITY);
   //xTaskCreatePinnedToCore(taskBTcom,"BT com", 1024, NULL, tskIDLE_PRIORITY+3, &h_BTcom, tskNO_AFFINITY);
-  xTaskCreatePinnedToCore(taskDialmode,"DialMode", 1024, NULL, tskIDLE_PRIORITY+4, &h_dialMode, tskNO_AFFINITY);
-  xTaskCreatePinnedToCore(taskLedflasher, "LED flash", 1024, NULL, tskIDLE_PRIORITY+1, &h_ledFlasher, tskNO_AFFINITY);
-  xTaskCreatePinnedToCore(taskBeeper, "Beeper", 1024, NULL, tskIDLE_PRIORITY+2, &h_beeper, tskNO_AFFINITY);
   //xTaskCreatePinnedToCore(taskServotest, "ServoTest", 1024, NULL, tskIDLE_PRIORITY+6, &h_servoTest, tskNO_AFFINITY);
 
-  xTaskCreatePinnedToCore(taskModeRC, "ModeRC", 2048, NULL, tskIDLE_PRIORITY+5, &h_modeRC, tskNO_AFFINITY);
-  xTaskCreatePinnedToCore(taskModeStand, "ModeStand", 1024, NULL, tskIDLE_PRIORITY+4, &h_modeStand, tskNO_AFFINITY);
-  xTaskCreatePinnedToCore(taskModeAdjust, "ModeAdjust", 2048, NULL, tskIDLE_PRIORITY+4, &h_modeAdjust, tskNO_AFFINITY);
-  xTaskCreatePinnedToCore(taskModeDemo, "ModeDemo", 2048, NULL, tskIDLE_PRIORITY+4, &h_modeDemo, tskNO_AFFINITY);
-  xTaskCreatePinnedToCore(taskModeTest, "ModeTest", 2048, NULL, tskIDLE_PRIORITY+4, &h_modeTest, tskNO_AFFINITY );
-
+  /* Support Tasks */
+  xTaskCreatePinnedToCore(taskDialmode,"DialMode", 1024, NULL, tskIDLE_PRIORITY+3, &h_dialMode, tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(taskLedflasher, "LED flash", 1024, NULL, tskIDLE_PRIORITY+2, &h_ledFlasher, tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(taskIrq, "irq counter", 2048, NULL, tskIDLE_PRIORITY+2, &h_irqTask, tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(taskBatteryMonitor, "Bat monitor", 2048, NULL, tskIDLE_PRIORITY+3, &h_battery, tskNO_AFFINITY);
   xTaskCreatePinnedToCore(taskReporter, "Reporter", 2048, NULL, tskIDLE_PRIORITY+3, &h_reporter, tskNO_AFFINITY);
 
-  xTaskCreatePinnedToCore(taskIrq, "irq counter", 2048, NULL, tskIDLE_PRIORITY+7, &h_irqTask, tskNO_AFFINITY);
+  /* Mode Tasks */
+  xTaskCreatePinnedToCore(taskModeRC, "ModeRC", 2048, NULL, tskIDLE_PRIORITY+10, &h_modeRC, tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(taskModeStand, "ModeStand", 1024, NULL, tskIDLE_PRIORITY+9, &h_modeStand, tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(taskModeAdjust, "ModeAdjust", 2048, NULL, tskIDLE_PRIORITY+8, &h_modeAdjust, tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(taskModeDemo, "ModeDemo", 2048, NULL, tskIDLE_PRIORITY+7, &h_modeDemo, tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(taskModeTest, "ModeTest", 2048, NULL, tskIDLE_PRIORITY+6, &h_modeTest, tskNO_AFFINITY );
+
 
 
   Serial.println("Inquisipod ......");
