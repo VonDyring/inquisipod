@@ -7,18 +7,21 @@
 #include <Tone32.h>
 #include "inquisipos.h"
 #include <microsmooth.h>
-#include <TTS.h>
+
 
 const char *Version = "#RV2r1a";
 
 /* PINS */
-#define BEEPER_PIN  25
-#define MODE_PIN    A4    // pin 32
-#define TEST_PIN    A5    // pin 33
-#define BUTTONPIN   0
+#define BEEPER_PIN    25
+#define MODE_PIN      A4    // pin 32
+#define TEST_PIN      A5    // pin 33
+#define BUTTONPIN     0
 #define ULTRAOUTPUTPIN  27
 #define ULTRAINPUTPIN   14
 #define BATTERY_PIN   _VBAT
+#define DAC_PIN       25
+#define BT_TX         2
+#define BT_RX         4
 
 
 // Basic functions that move legs take a bit pattern
@@ -146,8 +149,7 @@ const char *Version = "#RV2r1a";
 
 /* Bluetooth Serial connection 
  * RX -  IO4
- * TX -  IO2
- *   
+ * TX -  IO2  
 */
 #define BTSerial   Serial1
 #define BF_ERROR  100         // deep beep for error situations
@@ -164,7 +166,8 @@ const char *Version = "#RV2r1a";
 
 #define SERVO_IIC_ADDR  (0x40)    // default servo driver IIC address
 
-/* #define PWMFREQUENCY (50*FreqMult)
+/* 
+#define PWMFREQUENCY (50*FreqMult)
 #define SERVOMIN  (190*FreqMult) // this is the 'minimum' pulse length count (out of 4096)
 #define SERVOMAX  (540*FreqMult) // this is the 'maximum' pulse length count (out of 4096)
  */
@@ -407,8 +410,8 @@ void turn(int ccw, int hipforward, int hipbackward, int kneeup, int kneedown, lo
 
 
 
-#define NUM_TURN_PHASES 6
-#define FBSHIFT_TURN    40   // shift front legs back, back legs forward, this much
+  #define NUM_TURN_PHASES 6
+  #define FBSHIFT_TURN    40   // shift front legs back, back legs forward, this much
   
   long t = millis()%timeperiod;
   long phase = (NUM_TURN_PHASES*t)/timeperiod;
@@ -478,9 +481,9 @@ void tiptoes() {
 
 void wave(int dpad) {
   
-#define NUM_WAVE_PHASES 12
-#define WAVE_CYCLE_TIME 900
-#define KNEE_WAVE  60
+  #define NUM_WAVE_PHASES 12
+  #define WAVE_CYCLE_TIME 900
+  #define KNEE_WAVE  60
   long t = millis()%WAVE_CYCLE_TIME;
   long phase = (NUM_WAVE_PHASES*t)/WAVE_CYCLE_TIME;
 
@@ -566,8 +569,8 @@ void gait_sidestep(int left, long timeperiod) {
 
   // the gait consists of 6 phases and uses tripod definitions
 
-#define NUM_SIDESTEP_PHASES 6
-#define FBSHIFTSS    50   // shift front legs back, back legs forward, this much
+  #define NUM_SIDESTEP_PHASES 6
+  #define FBSHIFTSS    50   // shift front legs back, back legs forward, this much
   
   long t = millis()%timeperiod;
   long phase = (NUM_SIDESTEP_PHASES*t)/timeperiod;
@@ -659,7 +662,7 @@ void griparm_mode(char dpad) {
 
     // Now that all the targets are adjusted, move the servos toward their targets, slowly
 
-#define GRIPMOVEINCREMENT 10  // degrees per transmission time delay
+  #define GRIPMOVEINCREMENT 10  // degrees per transmission time delay
 
       int h, k;
       h = ServoPos[GRIPARM_ELBOW_SERVO];
@@ -703,7 +706,7 @@ unsigned short HipTarget[NUM_LEGS];
 
 void fight_mode(char dpad, int mode, long timeperiod) {
 
-#define HIP_FISTS_FORWARD 130
+  #define HIP_FISTS_FORWARD 130
 
   if (Dialmode == DIALMODE_RC_GRIPARM && mode == SUBMODE_2) {
     // we're really not fighting, we're controlling the grip arm if GRIPARM is nonzero
@@ -827,7 +830,7 @@ void fight_mode(char dpad, int mode, long timeperiod) {
   if (mode == SUBMODE_4 || mode == SUBMODE_3) { // incremental moves
 
     // move servos toward their targets
-#define MOVEINCREMENT 10  // degrees per transmission time delay
+  #define MOVEINCREMENT 10  // degrees per transmission time delay
 
     for (int i = 0; i < NUM_LEGS; i++) {
       int h, k;
@@ -913,7 +916,7 @@ void fight_mode(char dpad, int mode, long timeperiod) {
     
     case 'w':  // automatic ninja motion mode with both legs swinging left/right/up/down furiously!
 
-#define NUM_PUGIL_PHASES 8
+  #define NUM_PUGIL_PHASES 8
         {  // we need a new scope for this because there are local variables
         
         long t = millis()%timeperiod;
@@ -996,8 +999,8 @@ void gait_tripod(int reverse, int hipforward, int hipbackward,
     hipbackward = tmp;
   }
 
-#define NUM_TRIPOD_PHASES 6
-#define FBSHIFT    15   // shift front legs back, back legs forward, this much
+  #define NUM_TRIPOD_PHASES 6
+  #define FBSHIFT    15   // shift front legs back, back legs forward, this much
   
   long t = millis()%timeperiod;
   long phase = (NUM_TRIPOD_PHASES*t)/timeperiod;
@@ -1072,11 +1075,11 @@ void gait_tripod_scamper(int reverse, int turn) {
     hipbackward = HIP_BACKWARD;
   }
 
-#define FBSHIFT    15   // shift front legs back, back legs forward, this much
-#define SCAMPERPHASES 6
+  #define FBSHIFT    15   // shift front legs back, back legs forward, this much
+  #define SCAMPERPHASES 6
 
-#define KNEEDELAY 35   //30
-#define HIPDELAY 100   //90
+  #define KNEEDELAY 35   //30
+  #define HIPDELAY 100   //90
 
   if (millis() >= NextScamperPhaseTime) {
     ScamperPhase++;
@@ -1156,7 +1159,7 @@ void gait_ripple(int reverse, int hipforward, int hipbackward, int kneeup, int k
     hipbackward = tmp;
   }
 
-#define NUM_RIPPLE_PHASES 19
+  #define NUM_RIPPLE_PHASES 19
   
   long t = millis()%timeperiod;
   long phase = (NUM_RIPPLE_PHASES*t)/timeperiod;
@@ -1269,7 +1272,7 @@ void foldup() {
 }
 
 void dance_dab(int timingfactor) {
-#define NUM_DAB_PHASES 3
+  #define NUM_DAB_PHASES 3
   
   long t = millis()%(1100*timingfactor);
   long phase = (NUM_DAB_PHASES*t)/(1100*timingfactor);
@@ -1290,9 +1293,9 @@ void dance_dab(int timingfactor) {
 }
 
 void flutter() {   // ballet flutter legs on pointe
-#define NUM_FLUTTER_PHASES 4
-#define FLUTTER_TIME 200
-#define KNEE_FLUTTER (KNEE_TIPTOES+20)
+  #define NUM_FLUTTER_PHASES 4
+  #define FLUTTER_TIME 200
+  #define KNEE_FLUTTER (KNEE_TIPTOES+20)
 
   long t = millis()%(FLUTTER_TIME);
   long phase = (NUM_FLUTTER_PHASES*t)/(FLUTTER_TIME);
@@ -1322,7 +1325,7 @@ void flutter() {   // ballet flutter legs on pointe
 
 void dance_ballet(int dpad) {   // ballet flutter legs on pointe
 
-#define BALLET_TIME 250
+  #define BALLET_TIME 250
 
   switch (dpad) {
 
@@ -1376,8 +1379,8 @@ void dance_hands(int dpad) {
       break;
     case 'w':
       // AUTOMATIC MODE
-#define NUM_HANDS_PHASES 2
-#define HANDS_TIME_PERIOD 400
+  #define NUM_HANDS_PHASES 2
+  #define HANDS_TIME_PERIOD 400
         {  // we need a new scope for this because there are local variables
         
         long t = millis()%HANDS_TIME_PERIOD;
@@ -1407,7 +1410,7 @@ void dance(int legs_up, int submode, int timingfactor) {
    setLeg(legs_up, NOMOVE, KNEE_UP, 0, 0);
    setLeg((legs_up^0b111111), NOMOVE, ((submode==SUBMODE_1)?KNEE_STAND:KNEE_TIPTOES), 0, 0);
 
-#define NUM_DANCE_PHASES 2
+  #define NUM_DANCE_PHASES 2
   
   long t = millis()%(600*timingfactor);
   long phase = (NUM_DANCE_PHASES*t)/(600*timingfactor);
@@ -1430,7 +1433,7 @@ void boogie_woogie(int legs_flat, int submode, int timingfactor) {
       setLeg(ALL_LEGS, NOMOVE, KNEE_UP, 0);
       //setLeg(legs_flat, NOMOVE, KNEE_RELAX, 0, 0);
 
-#define NUM_BOOGIE_PHASES 2
+  #define NUM_BOOGIE_PHASES 2
   
   long t = millis()%(400*timingfactor);
   long phase = (NUM_BOOGIE_PHASES*t)/(400*timingfactor);
@@ -1479,12 +1482,12 @@ void checkForCrashingHips() {
     int adjust = (diff-85)/2 + 1;  // each leg will get adjusted half the amount needed to avoid the crash
     
     // to debug crash detection, make the following line #if 1, else make it #if 0
-#if 1
-    Serial.print("#CRASH:");
-    Serial.print(leg);Serial.print("="); Serial.print(ServoPos[leg]);
-    Serial.print("/");Serial.print(nextleg);Serial.print("="); Serial.print(ServoPos[nextleg]);
-    Serial.print(" Diff="); Serial.print(diff); Serial.print(" ADJ="); Serial.println(adjust);
-#endif
+  #if 1
+      Serial.print("#CRASH:");
+      Serial.print(leg);Serial.print("="); Serial.print(ServoPos[leg]);
+      Serial.print("/");Serial.print(nextleg);Serial.print("="); Serial.print(ServoPos[nextleg]);
+      Serial.print(" Diff="); Serial.print(diff); Serial.print(" ADJ="); Serial.println(adjust);
+  #endif
 
     setServo(leg, ServoPos[leg] + adjust);   
     setServo(nextleg, ServoPos[nextleg] - adjust);
@@ -1554,7 +1557,7 @@ void checkForServoSleep() {
 void checkLegStressSituation() {
       return; // This is experimental and for now we're disabling it by immediately returning
 
-#if 0
+  #if 0
       
       // ok we got new data. Awesome! If it's not the same mode as the old data and would result in the robot
       // attempting to lift off the ground with less than all six legs, then insert a 200 millisecond
@@ -1599,7 +1602,7 @@ void checkLegStressSituation() {
             delay(200);
           }
 
-#endif
+  #endif
 }
 
 void checkForSmoothMoves() {
@@ -1754,14 +1757,14 @@ int receiveDataHandler() {
     // uncomment the following lines if you're doing some serious packet debugging, but be aware this will take up so
     // much time you will drop some data. I would suggest slowing the gamepad/scratch sending rate to 4 packets per
     // second or slower if you want to use this.
-#if 0
-unsigned long m = millis();
-//Serial.print(m);
-Serial.print("'"); Serial.write(c); Serial.print("' ("); Serial.print((int)c); 
-//Serial.print(")S="); Serial.print(packetState); Serial.print(" a="); Serial.print(BlueTooth.available()); Serial.println("");
-//Serial.print(m);
-Serial.println("");
-#endif
+  #if 0
+  unsigned long m = millis();
+  //Serial.print(m);
+  Serial.print("'"); Serial.write(c); Serial.print("' ("); Serial.print((int)c); 
+  //Serial.print(")S="); Serial.print(packetState); Serial.print(" a="); Serial.print(BlueTooth.available()); Serial.println("");
+  //Serial.print(m);
+  Serial.println("");
+  #endif
     
     switch (packetState) {
       case P_WAITING_FOR_HEADER:
@@ -1936,11 +1939,11 @@ void processPacketData() {
         
       case 'R': // Raw Servo Move Command (from Scratch most likely)
 
-#define RAWSERVOPOS 0
-#define RAWSERVOADD 1
-#define RAWSERVOSUB 2
-#define RAWSERVONOMOVE 255
-#define RAWSERVODETACH 254
+  #define RAWSERVOPOS 0
+  #define RAWSERVOADD 1
+  #define RAWSERVOSUB 2
+  #define RAWSERVONOMOVE 255
+  #define RAWSERVODETACH 254
         // Raw servo command is 18 bytes, command R, second byte is type of move, next 16 are all the servo ports positions
         // note: this can move more than just leg servos, it can also access the four ports beyond the legs so
         // you could make active attachments with servo motors, or you could control LED light brightness, etc.
@@ -2245,11 +2248,11 @@ void gait_command(int gaittype, int reverse, int hipforward, int hipbackward, in
                    break;
        }
 
-#if 0
-       Serial.print("GAIT: style="); Serial.print(gaittype); Serial.print(" dir="); Serial.print(reverse,DEC); Serial.print(" angles=");Serial.print(hipforward);
-       Serial.print("/"); Serial.print(hipbackward); Serial.print("/"); Serial.print(kneeup,DEC); Serial.print("/"); Serial.print(kneedown); 
-       Serial.print("/"); Serial.println(leanangle);
-#endif
+  #if 0
+        Serial.print("GAIT: style="); Serial.print(gaittype); Serial.print(" dir="); Serial.print(reverse,DEC); Serial.print(" angles=");Serial.print(hipforward);
+        Serial.print("/"); Serial.print(hipbackward); Serial.print("/"); Serial.print(kneeup,DEC); Serial.print("/"); Serial.print(kneedown); 
+        Serial.print("/"); Serial.println(leanangle);
+  #endif
 
        mode = MODE_GAIT;   // this stops auto-repeat of gamepad mode commands
 }
@@ -2263,6 +2266,12 @@ void let_it_go(){
   beep(NOTE_A4, 50);
   beep(NOTE_B4, 50);
   beep(NOTE_C3, 800);
+}
+
+
+float getBatteryVoltage() {
+  uint16_t val = analogRead(BATTERY_PIN);
+  return (float) (val * 3.3f * 2.0f * 1.05f )/4095.0f;   // val * maxVolt * divider * corr / maxres
 }
 /* TASKS
 ******************************************************************************/
@@ -2283,33 +2292,31 @@ TaskHandle_t h_reporter;
 bool dialPause = false;
 bool lowBatt = false;
 
+
 TaskHandle_t h_battery;
 void taskBatteryMonitor(void *pvParameters){
-  const float min_volt = 4.9f;
+  const float min_volt = 4.8f;
   pinMode(BATTERY_PIN, ANALOG);
   uint8_t c = 0;
   for(;;){
     myDelayMs(500);
-    uint16_t val = analogRead(BATTERY_PIN);
-    float volt = (val * 3.3f * 2.0f * 1.05f )/4095.0f;      // val * maxVolt * divider * corr / maxres  
+    float volt = getBatteryVoltage(); 
     c++;
     if (c >= 2){
       c = 0;
       if (volt < min_volt){
-        lowBatt = true;
-        Serial.printf("LOW VOLTAGE : %.2f \n", volt);
-        let_it_go();
-        /*
-        beep(NOTE_B4, 500);
-        myDelayMs(100);
-        beep(NOTE_A4, 100);
-        */
+        myDelayMs(500);       // Bounce delay
+        volt = getBatteryVoltage();
+        if (volt < min_volt){
+          lowBatt = true;
+          Serial.printf("LOW VOLTAGE : %.2f \n", volt);
+          let_it_go();
+        }
       } else {
         lowBatt = false;
       }
     }
   }
-
 }
 
 void printTaskInfo(xTaskHandle xTaskToQuery=NULL){
@@ -2342,7 +2349,7 @@ void taskReporter(void *pvParameters){  // reporting modes on serial
     myDelayMs(ReportTime);
     if(Dialmode == DIALMODE_STAND){
       ReportTime = 1000;
-      Serial.printf("Stand Mode\n");
+      //Serial.printf("Stand Mode\n");
       //Serial.printf("%s mark: %u bytes \n",pcTaskGetTaskName(h_modeRC), uxTaskGetStackHighWaterMark(h_modeRC));
       // add more readouts here if needed
     } else if (Dialmode == DIALMODE_ADJUST){
@@ -2370,14 +2377,14 @@ void taskReporter(void *pvParameters){  // reporting modes on serial
 // Bluetooth coms. A task for confirming serial communication with Bluetooth module
 void taskBTcom(void *pvParameters){
   while(1){
-    myDelayMs(10);
+    myDelayMs(20);
 
-    if (BTSerial.available()) {  
+    while (BTSerial.available()) {  
         Serial.write(BTSerial.read());
     }
 
     // Keep reading from Arduino Serial Monitor and send to HC-06
-    if (Serial.available()) {
+    while (Serial.available()) {
         BTSerial.write(Serial.read());
     }
   }
@@ -2909,7 +2916,10 @@ void taskIrq(void *pvParameters){
 
 
 void setup() {
-  ledcSetup(TONE_CHANNEL, buzzer_freq, buzzer_resolution );    // buzzer
+  /* buzzer stuff */
+  ledcSetup(TONE_CHANNEL, buzzer_freq, buzzer_resolution );   
+  semapforBeep = xSemaphoreCreateMutex(); 
+
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(BUTTONPIN,INPUT);
   
@@ -2920,13 +2930,12 @@ void setup() {
   timerAlarmEnable(timer_rupt);
 
   Serial.begin(115200);
-  BTSerial.begin(38400);
+  BTSerial.begin(38400, SERIAL_8N1, BT_RX, BT_TX);
 
-  semapforBeep = xSemaphoreCreateMutex();
 
   /* Debug Tasks */
   xTaskCreatePinnedToCore(taskPrint,"Print", 3072, NULL, tskIDLE_PRIORITY+2, &h_print,tskNO_AFFINITY);
-  //xTaskCreatePinnedToCore(taskBTcom,"BT com", 1024, NULL, tskIDLE_PRIORITY+3, &h_BTcom, tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(taskBTcom,"BT com", 1024, NULL, tskIDLE_PRIORITY+3, &h_BTcom, tskNO_AFFINITY);
   //xTaskCreatePinnedToCore(taskServotest, "ServoTest", 1024, NULL, tskIDLE_PRIORITY+6, &h_servoTest, tskNO_AFFINITY);
 
   /* Support Tasks */
@@ -2937,7 +2946,7 @@ void setup() {
   xTaskCreatePinnedToCore(taskReporter, "Reporter", 2048, NULL, tskIDLE_PRIORITY+3, &h_reporter, tskNO_AFFINITY);
 
   /* Mode Tasks */
-  xTaskCreatePinnedToCore(taskModeRC, "ModeRC", 2048, NULL, tskIDLE_PRIORITY+10, &h_modeRC, tskNO_AFFINITY);
+  //xTaskCreatePinnedToCore(taskModeRC, "ModeRC", 2048, NULL, tskIDLE_PRIORITY+10, &h_modeRC, tskNO_AFFINITY);
   xTaskCreatePinnedToCore(taskModeStand, "ModeStand", 1024, NULL, tskIDLE_PRIORITY+9, &h_modeStand, tskNO_AFFINITY);
   xTaskCreatePinnedToCore(taskModeAdjust, "ModeAdjust", 2048, NULL, tskIDLE_PRIORITY+8, &h_modeAdjust, tskNO_AFFINITY);
   xTaskCreatePinnedToCore(taskModeDemo, "ModeDemo", 2048, NULL, tskIDLE_PRIORITY+7, &h_modeDemo, tskNO_AFFINITY);
@@ -2981,16 +2990,17 @@ void setup() {
   BTSerial.println(Version);
 
   resetServoDriver();
-  //delay(250);
+  delay(250);
   
-  //stand();
-  //setGrip(90, 90);  // neutral grip arm (if installed)
+  stand();
+  setGrip(90, 90);  // neutral grip arm (if installed)
   
   delay(300);
   
   //CmuCam5.init();   // we're still working out some issues with CmuCam5
   
   beep(800,500); // Signals end of startup sequence
+  delay(500);
 
 }
 
